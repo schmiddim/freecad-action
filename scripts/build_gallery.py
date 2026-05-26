@@ -435,38 +435,21 @@ def format_iso8601(timestamp):
 
 
 def get_base_url():
-    """Derive base URL from git remote or environment variable.
-    
+    """Derive the gallery base URL from environment variables.
+
     Priority:
-      1. GALLERY_BASE_URL env var (user-provided)
-      2. Extract from git remote (github.com/user/repo -> https://user.github.io/repo)
+      1. GALLERY_BASE_URL env var (user-provided override)
+      2. GITHUB_REPOSITORY env var (GitHub Actions, including Docker)
       3. Fallback to localhost
     """
     base_url = os.environ.get('GALLERY_BASE_URL')
     if base_url:
         return base_url.rstrip('/')
 
-    # Try GITHUB_REPOSITORY env var (available in GitHub Actions, including Docker)
     gh_repo = os.environ.get('GITHUB_REPOSITORY')  # e.g. "user/repo"
     if gh_repo:
         user, repo = gh_repo.split('/', 1)
         return f'https://{user}.github.io/{repo}'
-
-    # Try git remotes
-    for remote_name in ('master', 'origin'):
-        try:
-            result = subprocess.run(
-                ['git', 'config', '--get', f'remote.{remote_name}.url'],
-                capture_output=True, text=True, check=True
-            )
-            remote = result.stdout.strip()
-            if 'github.com' in remote:
-                parts = remote.replace(':', '/').replace('.git', '').split('/')
-                user = parts[-2]
-                repo = parts[-1]
-                return f'https://{user}.github.io/{repo}'
-        except Exception:
-            pass
 
     return 'http://localhost:8000'  # Fallback
 
@@ -475,65 +458,25 @@ AGGREGATOR_URL = "https://freecad-aggregator.fly.dev/ping"
 
 
 def get_git_source_url():
-    """Derive the HTTPS source URL from the git remote.
+    """Derive the HTTPS source URL from environment variables.
 
-    Handles both SSH (git@host:user/repo.git) and HTTPS remotes.
-    Returns None if the remote cannot be determined.
+    Uses GITHUB_REPOSITORY and GITHUB_SERVER_URL (set by GitHub Actions).
+    Returns None if the variables are not set.
     """
-    # Try GITHUB_REPOSITORY env var first (works in Docker containers in GH Actions)
     gh_repo = os.environ.get('GITHUB_REPOSITORY')  # e.g. "user/repo"
     if gh_repo:
         server = os.environ.get('GITHUB_SERVER_URL', 'https://github.com')
         return f'{server}/{gh_repo}'
 
-    # Try git remotes
-    for remote_name in ('origin', 'master'):
-        try:
-            result = subprocess.run(
-                ['git', 'remote', 'get-url', remote_name],
-                capture_output=True, text=True, check=True
-            )
-            remote = result.stdout.strip()
-            if not remote:
-                continue
-
-            # SSH: git@host:user/repo.git  →  https://host/user/repo
-            if remote.startswith('git@'):
-                remote = remote[len('git@'):]
-                remote = remote.replace(':', '/', 1)
-                remote = remote.rstrip('/')
-                if remote.endswith('.git'):
-                    remote = remote[:-4]
-                return f'https://{remote}'
-
-            # HTTPS
-            if remote.startswith('http://') or remote.startswith('https://'):
-                remote = remote.rstrip('/')
-                if remote.endswith('.git'):
-                    remote = remote[:-4]
-                return remote
-        except Exception:
-            continue
-
     return None
 
 
 def get_git_tag():
-    """Get the current git tag (latest annotated tag).
-    
-    Returns the tag name (e.g., 'v2.2.6') or 'main' as fallback.
+    """Get the current action version from the ACTION_REF env var.
+
+    Returns the tag/ref (e.g., 'v2.8.7') or 'dev' as fallback.
     """
-    try:
-        result = subprocess.run(
-            ['git', 'describe', '--tags', '--abbrev=0'],
-            capture_output=True, text=True, check=True
-        )
-        tag = result.stdout.strip()
-        if tag:
-            return tag
-    except Exception:
-        pass
-    return 'main'
+    return os.environ.get('ACTION_REF', 'dev')
 
 
 def build_discovery(config, models, profile, base_url):
@@ -606,6 +549,9 @@ def ping_aggregator(base_url):
         "git_source_url": git_source_url,
         "event": "push",
     }).encode('utf-8')
+
+    safe_print(f"Aggregator ping to {AGGREGATOR_URL}")
+    safe_print(f"Aggregator payload: {payload.decode()}")
 
     req = urllib.request.Request(
         AGGREGATOR_URL,

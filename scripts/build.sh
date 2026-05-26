@@ -62,6 +62,8 @@ step_gallery() {
         -e ACTION_PATH=/action \
         -e SEND_PING="${SEND_PING:-false}" \
         -e ACTION_REF="${ACTION_REF:-}" \
+        -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-}" \
+        -e GITHUB_SERVER_URL="${GITHUB_SERVER_URL:-}" \
         -w /workspace \
         "${DOCKER_IMAGE}" \
         /action/scripts/build_gallery.py

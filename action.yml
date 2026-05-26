@@ -7,10 +7,6 @@ branding:
   color: 'orange'
 
 inputs:
-  use-docker:
-    description: 'Use Docker for FreeCAD export (recommended for consistency)'
-    required: false
-    default: 'true'
   send-ping:
     description: 'Send a POST ping to the aggregator after the gallery build'
     required: false
@@ -24,7 +20,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    # --- Setup Node.js for Tailwind CSS compilation ---
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
@@ -36,9 +31,7 @@ runs:
         SCRIPTS_DIR="${{ github.action_path }}/scripts"
         [ -f "${SCRIPTS_DIR}/package.json" ] && cd "${SCRIPTS_DIR}" && npm ci --no-audit --no-fund
 
-    # --- Export via Docker (same as: make build) ---
-    - name: Export + Build Gallery (Docker)
-      if: inputs.use-docker == 'true'
+    - name: Export + Build Gallery
       id: build-gallery
       shell: bash
       env:
@@ -49,51 +42,5 @@ runs:
         ACTION_REF: ${{ github.action_ref }}
       run: |
         ${{ github.action_path }}/scripts/build.sh build
-        MODEL_COUNT=$(find gallery/view -name '*.html' 2>/dev/null | wc -l)
-        echo "models-count=$MODEL_COUNT" >> "$GITHUB_OUTPUT"
-
-    # --- Export via conda (fallback, no Docker) ---
-    - name: Install Miniforge
-      if: inputs.use-docker != 'true'
-      uses: conda-incubator/setup-miniconda@v4
-      with:
-        miniforge-version: latest
-        activate-environment: freecad-env
-        conda-remove-defaults: true
-        use-mamba: true
-
-    - name: Cache conda packages
-      if: inputs.use-docker != 'true'
-      uses: actions/cache@v5
-      with:
-        path: ~/conda_pkgs_dir
-        key: conda-${{ runner.os }}-freecad-v1
-
-    - name: Install FreeCAD (conda)
-      if: inputs.use-docker != 'true'
-      shell: bash -el {0}
-      run: |
-        mamba install -c conda-forge python=3.12 freecad pyyaml trimesh matplotlib scipy pillow -y --quiet
-        # Install OpenSCAD for fast thumbnail rendering (with xvfb for headless)
-        sudo apt-get update && sudo apt-get install -y openscad xvfb
-
-    - name: Export FCStd (conda)
-      if: inputs.use-docker != 'true'
-      shell: bash -el {0}
-      run: |
-        EXPORT_SCRIPT="scripts/export.py"
-        [ ! -f "$EXPORT_SCRIPT" ] && EXPORT_SCRIPT="${{ github.action_path }}/scripts/export.py"
-        freecadcmd "$EXPORT_SCRIPT"
-
-    - name: Build Gallery (conda)
-      if: inputs.use-docker != 'true'
-      id: build-gallery-conda
-      shell: bash
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-        SEND_PING: ${{ inputs.send-ping }}
-        ACTION_REF: ${{ github.action_ref }}
-      run: |
-        ${{ github.action_path }}/scripts/build.sh gallery
         MODEL_COUNT=$(find gallery/view -name '*.html' 2>/dev/null | wc -l)
         echo "models-count=$MODEL_COUNT" >> "$GITHUB_OUTPUT"

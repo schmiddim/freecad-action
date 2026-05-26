@@ -40,8 +40,6 @@ jobs:
 
       - name: Build exports for release
         uses: ./
-        with:
-          use-docker: 'false'
 
       - uses: softprops/action-gh-release@v3
         with:

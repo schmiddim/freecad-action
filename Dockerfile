@@ -9,6 +9,7 @@ RUN mamba create -n freecad -y --quiet \
         python=3.12 \
         freecad \
         pyyaml \
+        jinja2 \
         trimesh \
         matplotlib \
         scipy \

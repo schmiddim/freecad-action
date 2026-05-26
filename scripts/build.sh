@@ -11,29 +11,12 @@ set -euo pipefail
 
 DOCKER_IMAGE="${DOCKER_IMAGE:-ghcr.io/schmiddim/freecad-action:latest}"
 WORKSPACE="${WORKSPACE:-$(pwd)}"
-PYTHON="${PYTHON:-$(command -v python3 2>/dev/null || command -v python 2>/dev/null)}"
 
 # Resolve script directory (for local dev) and ACTION_PATH (for CI)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ACTION_PATH="${ACTION_PATH:-$(dirname "$SCRIPT_DIR")}"
 
-# Find a script: prefer user's repo, fall back to action's bundled copy
-find_script() {
-    local name="$1"
-    if [ -f "${WORKSPACE}/${name}" ]; then
-        echo "${WORKSPACE}/${name}"
-    elif [ -f "${ACTION_PATH}/${name}" ]; then
-        echo "${ACTION_PATH}/${name}"
-    else
-        echo >&2 "Error: ${name} not found in workspace or action path"
-        exit 1
-    fi
-}
-
 step_export() {
-    local export_script
-    export_script="$(find_script scripts/export.py)"
-
     echo "==> Pulling Docker image ${DOCKER_IMAGE}..."
     if ! docker pull "${DOCKER_IMAGE}" 2>/dev/null; then
         echo "==> Pull failed, building image locally..."
@@ -43,9 +26,9 @@ step_export() {
     echo "==> Exporting FCStd files to STL/STEP via Docker..."
     docker run --rm \
         -v "${WORKSPACE}:/workspace" \
-        -v "${export_script}:/workspace/scripts/export.py:ro" \
+        -v "${ACTION_PATH}/scripts:/action/scripts:ro" \
         "${DOCKER_IMAGE}" \
-        scripts/export.py
+        /action/scripts/export.py
 }
 
 step_css() {
@@ -60,30 +43,28 @@ step_css() {
         return 0
     fi
 
-    echo "==> Building Tailwind CSS..."
-    if command -v npm >/dev/null 2>&1; then
-        (cd "${scripts_dir}" && npm install --no-audit --no-fund 2>&1 | tail -1 || true)
-        (cd "${scripts_dir}" && npm run build:css)
-    elif command -v npx >/dev/null 2>&1; then
-        (cd "${scripts_dir}" && npx tailwindcss -i ./templates/input.css -o ./templates/styles.css --minify)
-    else
-        echo "Warning: npm/npx not found, skipping Tailwind CSS build"
-        echo "         Install Node.js to enable Tailwind CSS compilation"
-    fi
+    echo "==> Building Tailwind CSS via node:22-slim..."
+    docker run --rm \
+        -v "${scripts_dir}:/scripts" \
+        -w /scripts \
+        node:22-slim \
+        sh -c "npm ci --no-audit --no-fund && npm run build:css"
 }
 
 step_gallery() {
-    local gallery_script
-    gallery_script="$(find_script scripts/build_gallery.py)"
-
-    # Build CSS before gallery
     step_css
 
-    echo "==> Installing Python dependencies..."
-    "${PYTHON}" -m pip install --quiet jinja2 pyyaml 2>&1 | grep -v "syncthing-gtk" | grep -v "new release of pip" || true
-
-    echo "==> Building gallery HTML..."
-    "${PYTHON}" "${gallery_script}"
+    echo "==> Building gallery HTML via ${DOCKER_IMAGE}..."
+    docker run --rm \
+        --entrypoint python \
+        -v "${WORKSPACE}:/workspace" \
+        -v "${ACTION_PATH}:/action:ro" \
+        -e ACTION_PATH=/action \
+        -e SEND_PING="${SEND_PING:-false}" \
+        -e ACTION_REF="${ACTION_REF:-}" \
+        -w /workspace \
+        "${DOCKER_IMAGE}" \
+        /action/scripts/build_gallery.py
 }
 
 case "${1:-build}" in

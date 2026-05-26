@@ -679,6 +679,7 @@ def main():
     build_discovery(config, models, profile, base_url)
 
     if os.environ.get('SEND_PING', '').lower() == 'true':
+        safe_print("Send Aggregator Ping to " + base_url)
         ping_aggregator(base_url)
 
 

@@ -445,26 +445,18 @@ def get_base_url():
     base_url = os.environ.get('GALLERY_BASE_URL')
     if base_url:
         return base_url.rstrip('/')
-    
-    try:
-        result = subprocess.run(
-            ['git', 'config', '--get', 'remote.master.url'],
-            capture_output=True, text=True, check=True
-        )
-        remote = result.stdout.strip()
-        
-        # Parse: git@github.com:user/repo.git or https://github.com/user/repo
-        if 'github.com' in remote:
-            # Extract user and repo from various git URL formats
-            parts = remote.replace(':', '/').replace('.git', '').split('/')
-            user = parts[-2]
-            repo = parts[-1]
-            return f'https://{user}.github.io/{repo}'
-    except:
-        # Try origin as fallback
+
+    # Try GITHUB_REPOSITORY env var (available in GitHub Actions, including Docker)
+    gh_repo = os.environ.get('GITHUB_REPOSITORY')  # e.g. "user/repo"
+    if gh_repo:
+        user, repo = gh_repo.split('/', 1)
+        return f'https://{user}.github.io/{repo}'
+
+    # Try git remotes
+    for remote_name in ('master', 'origin'):
         try:
             result = subprocess.run(
-                ['git', 'config', '--get', 'remote.origin.url'],
+                ['git', 'config', '--get', f'remote.{remote_name}.url'],
                 capture_output=True, text=True, check=True
             )
             remote = result.stdout.strip()
@@ -473,9 +465,9 @@ def get_base_url():
                 user = parts[-2]
                 repo = parts[-1]
                 return f'https://{user}.github.io/{repo}'
-        except:
+        except Exception:
             pass
-    
+
     return 'http://localhost:8000'  # Fallback
 
 
@@ -488,35 +480,42 @@ def get_git_source_url():
     Handles both SSH (git@host:user/repo.git) and HTTPS remotes.
     Returns None if the remote cannot be determined.
     """
-    try:
-        result = subprocess.run(
-            ['git', 'remote', 'get-url', 'origin'],
-            capture_output=True, text=True, check=True
-        )
-        remote = result.stdout.strip()
-        if not remote:
-            return None
+    # Try GITHUB_REPOSITORY env var first (works in Docker containers in GH Actions)
+    gh_repo = os.environ.get('GITHUB_REPOSITORY')  # e.g. "user/repo"
+    if gh_repo:
+        server = os.environ.get('GITHUB_SERVER_URL', 'https://github.com')
+        return f'{server}/{gh_repo}'
 
-        # SSH: git@host:user/repo.git  →  https://host/user/repo
-        if remote.startswith('git@'):
-            # git@github.com:user/repo.git
-            remote = remote[len('git@'):]          # github.com:user/repo.git
-            remote = remote.replace(':', '/', 1)   # github.com/user/repo.git
-            remote = remote.rstrip('/')
-            if remote.endswith('.git'):
-                remote = remote[:-4]
-            return f'https://{remote}'
+    # Try git remotes
+    for remote_name in ('origin', 'master'):
+        try:
+            result = subprocess.run(
+                ['git', 'remote', 'get-url', remote_name],
+                capture_output=True, text=True, check=True
+            )
+            remote = result.stdout.strip()
+            if not remote:
+                continue
 
-        # HTTPS: https://host/user/repo.git  →  https://host/user/repo
-        if remote.startswith('http://') or remote.startswith('https://'):
-            remote = remote.rstrip('/')
-            if remote.endswith('.git'):
-                remote = remote[:-4]
-            return remote
+            # SSH: git@host:user/repo.git  →  https://host/user/repo
+            if remote.startswith('git@'):
+                remote = remote[len('git@'):]
+                remote = remote.replace(':', '/', 1)
+                remote = remote.rstrip('/')
+                if remote.endswith('.git'):
+                    remote = remote[:-4]
+                return f'https://{remote}'
 
-        return None
-    except Exception:
-        return None
+            # HTTPS
+            if remote.startswith('http://') or remote.startswith('https://'):
+                remote = remote.rstrip('/')
+                if remote.endswith('.git'):
+                    remote = remote[:-4]
+                return remote
+        except Exception:
+            continue
+
+    return None
 
 
 def get_git_tag():

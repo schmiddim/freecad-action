@@ -16,15 +16,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Setup Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '22'
-    - name: Install Tailwind CSS dependencies
-      shell: bash
-      run: |
-        SCRIPTS_DIR="${{ github.action_path }}/scripts"
-        [ -f "${SCRIPTS_DIR}/package.json" ] && cd "${SCRIPTS_DIR}" && npm ci --no-audit --no-fund
     - name: Export + Build Gallery
       id: build-gallery
       shell: bash

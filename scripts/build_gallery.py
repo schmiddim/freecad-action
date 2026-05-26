@@ -331,6 +331,7 @@ def build_gallery(config, models, profile):
         loader=FileSystemLoader(templates_dir),
         autoescape=False,
     )
+    env.globals['action_version'] = os.environ.get('ACTION_REF', 'dev')
 
     # Prepare output directories
     os.makedirs(output_dir, exist_ok=True)

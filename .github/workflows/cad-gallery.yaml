@@ -20,6 +20,7 @@ jobs:
     # Only run if Docker build succeeded (or if triggered by push without workflow_run)
     if: |
       github.event_name == 'push' || 
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     environment:

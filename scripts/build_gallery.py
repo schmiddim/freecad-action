@@ -479,7 +479,7 @@ def get_base_url():
     return 'http://localhost:8000'  # Fallback
 
 
-AGGREGATOR_URL = "https://webhook.site/9bcff9a7-e5a5-42ab-835c-ad2fc18d9151"
+AGGREGATOR_URL = "https://freecad-aggregator.fly.dev/ping"
 
 
 def get_git_source_url():

@@ -595,6 +595,7 @@ def build_discovery(config, models, profile, base_url):
 
 def ping_aggregator(base_url):
     """Send a POST ping to the aggregator URL."""
+    import ssl
     import urllib.request
     import urllib.error
 
@@ -613,8 +614,11 @@ def ping_aggregator(base_url):
         headers={'Content-Type': 'application/json', 'User-Agent': 'freecad-action'},
         method='POST',
     )
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
             safe_print(f"Aggregator ping sent to {AGGREGATOR_URL} (HTTP {resp.status})")
     except urllib.error.HTTPError as e:
         safe_print(f"Aggregator ping failed: HTTP {e.code} {e.reason}")

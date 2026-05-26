@@ -24,9 +24,9 @@ runs:
         WORKSPACE: ${{ github.workspace }}
         ACTION_PATH: ${{ github.action_path }}
         SEND_PING: ${{ inputs.send-ping }}
-        ACTION_REF: ${{ github.action_ref }}
+        ACTION_REF: ${{ github.action_ref || github.ref_name }}
       run: |
-        echo "==> FreeCAD Gallery Builder ${ACTION_REF:-unknown}"
+        echo "==> FreeCAD Gallery Builder ${ACTION_REF}"
         ${{ github.action_path }}/scripts/build.sh build
         MODEL_COUNT=$(find gallery/view -name '*.html' 2>/dev/null | wc -l)
         echo "models-count=$MODEL_COUNT" >> "$GITHUB_OUTPUT"
